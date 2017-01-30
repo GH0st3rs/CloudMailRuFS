@@ -112,10 +112,10 @@ class CloudMailAPI():
                         'links': False,
                         'complete': False
                     },
-                    'metad': 2, 
+                    'metad': 2,
                     'space': {'total': 102400, 'overquota': False, 'used': 74435}
                 }
-            }, 
+            },
             'email': self.email,
             'status': 200
         }'''
@@ -164,7 +164,14 @@ class CloudMailAPI():
         return listing
 
     def rm(self, file, batch=False):
-        self.check_share()
+        '''Unshare and remove file or folder
+        Return: {
+            'time': 1485768596194,
+            'email': self.email,
+            'body': file,
+            'status': 200
+        }'''
+        self.check_share(file)
         return self.connect('POST', 'file/remove', {'home': file})
 
     def mkdir(self, file, batch=False):
@@ -274,6 +281,7 @@ class CloudMailAPI():
     def file(self, file, batch=False):
         '''Return: {
             'time': 1485521913642,
+            # Folder
             'body': {
                 'count': {'files': 0, 'folders': 0},
                 'tree': '343030336563623030303030',
@@ -283,6 +291,18 @@ class CloudMailAPI():
                 'kind': 'folder',
                 'name': 'tmp2',
                 'rev': 10445
+            },
+            # File
+            "body": {
+                "mtime": 1384877382,
+                "virus_scan": "pass",
+                "name": file_short,
+                "size": 31457280,
+                "hash": "2B362A7A5E5DEEEB2DDDD056016FF4406ADDB530",
+                "kind": "file",
+                "weblink": "KRSt/XXXXXXXXXXXX",
+                "type": "file",
+                "home": file
             },
             'email': self.email,
             'status': 200
