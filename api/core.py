@@ -3,18 +3,38 @@ import requests
 import re
 import json
 import os
+import sys
 from time import time
+# Initialise global vars
+app_path = sys.path[0]
+data_path = os.path.join(app_path, 'data')
+
+
+def random_agent():
+    ua_file = os.path.join(data_path, 'user-agents.lst')
+    if os.path.exists(ua_file):
+        from random import choice
+        ua = choice(open(ua_file).read().splitlines())
+        return ua
+    else:
+        print('Error: File %s not found' % ua_file)
+        return 'Mozilla/5.0 (X11; Gentoo; Linux x86_64; rv:50.0) Gecko/20100101 Firefox/50.0'
 
 
 class CloudMailAPI():
-    def __init__(self):
+    def __init__(self, device, email=None, passwd=None):
+        self.dev = device
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:50.0) Gecko/20100101 Firefox/50.0',
-                                     'X-Requested-With': 'XMLHttpRequest'})
+        self.session.headers['X-Requested-With'] = 'XMLHttpRequest'
+        self.session.headers['User-Agent'] = random_agent()
         self.MAIN_HEADERS = {}
         self.api_url = 'https://cloud.mail.ru/api/v2/'
         self.public_url = 'https://cloud.mail.ru/public/'
         self.API_V = 2
+        if email is not None and passwd is not None:
+            self.__auth(email, passwd)
+        self.file_get_url = ''
+        self.file_upload_url = ''
 
     def debug(self, txt):
         print(txt)
@@ -27,7 +47,10 @@ class CloudMailAPI():
             return False
 
     def auth(self, email, passwd):
-        self.email = email
+        self.email = email.lower()
+        if not re.match('[a-z0-9\.\_]+@[a-z]+\.[a-z]{2,4}', self.email) or passwd == '':
+            print('Error you need enter login and password!')
+            return False
         login = self.email.split('@')[0]
         url = 'https://auth.mail.ru/cgi-bin/auth?lang=ru_RU&from=authpopup'
         data = {'page': 'https://cloud.mail.ru/?from=promo',
@@ -38,7 +61,7 @@ class CloudMailAPI():
                 'Username': login,
                 'saveauth': 1,
                 'new_auth_form': 1}
-
+        # Send request and parse data
         req = self.session.post(url, data)
         try:
             json_txt = re.findall('<script>window\[[a-zA-Z0-9\"\_]+\]\ *\=([^<]+)</script>', req.text)[0]
@@ -47,16 +70,31 @@ class CloudMailAPI():
             BUILD = json_txt['params']['BUILD']
             x_page_id = json_txt['params']['x-page-id']
         except:
-            csrf_token = re.findall('"csrf":"([a-zA-Z0-9]+)"', req.text)[0]
-            x_page_id = re.findall('"x-page-id":"([a-zA-Z0-9]+)"', req.text)[0]
-            BUILD = re.findall('"BUILD":"([a-zA-Z0-9]+)"', req.text)[0]
-
+            csrf_token = re.findall('"csrf":"([a-zA-Z0-9]+)"', req.text)
+            if len(csrf_token) != 0:
+                csrf_token = csrf_token[0]
+                x_page_id = re.findall('"x-page-id":"([a-zA-Z0-9]+)"', req.text)
+                if len(x_page_id) != 0:
+                    x_page_id = x_page_id[0]
+                    BUILD = re.findall('"BUILD":"([a-zA-Z0-9]+)"', req.text)[0]
+                else:
+                    print('Error could not find csrf_token')
+                    return
+            else:
+                print('Error could not find csrf_token')
+                return
+        # Set MAIN_HEADERS options
         self.MAIN_HEADERS['_'] = round(time() * 1000)
         self.MAIN_HEADERS['x-email'] = self.MAIN_HEADERS['email'] = self.email
         self.MAIN_HEADERS['x-page-id'] = x_page_id
         self.MAIN_HEADERS['build'] = BUILD
         self.MAIN_HEADERS['api'] = self.API_V
         self.MAIN_HEADERS['token'] = csrf_token
+        self.debug('Disk from account %s was connected' % self.email)
+        # Set urls
+        dispatcher = self.dispatcher()['body']
+        self.file_get_url = dispatcher['get'][0]['url']
+        self.file_upload_url = dispatcher['upload'][0]['url']
 
     def connect(self, method, action, data={}):
         data.update(self.MAIN_HEADERS)
@@ -143,7 +181,7 @@ class CloudMailAPI():
         }'''
         return self.connect('GET', 'dispatcher')
 
-    def ls(self, folder, batch=False):
+    def ls(self, folder='/', batch=False):
         '''[{"count": {"folders":4,"files":0},
             "tree": "343030336563623030303030",
             "name": "FOLDER_NAME",
@@ -221,7 +259,7 @@ class CloudMailAPI():
         self.check_share(file)
         return self.connect('POST', 'file/rename', {'home': file, 'name': new_name, 'conflict': 'rename'})
 
-    def download(self, file):
+    def download_zip(self, file):
         '''Use: https://cloud.mail.ru/ + body
         Return: {
             'status': 200,
@@ -237,9 +275,16 @@ class CloudMailAPI():
         else:
             return body
 
+    def download(self, file):
+        '''Return raw link to target file'''
+        body = self.file(file)
+        if not self.is_error(body):
+            return self.file_get_url + body['body']['home']
+        else:
+            return body
+
     def upload(self, file, path):
-        upload_folder = self.dispatcher()['body']['upload'][0]['url']
-        self.debug('Upload folder is: %s' % upload_folder)
+        self.debug('Upload folder is: %s' % self.file_upload_url)
         url_param = '?cloud_domain=2&fileapi%s&x-email=%s' % (round(time() * 1000), self.email.replace('@', '%40'))
         if os.path.exists(file):
             fName = os.path.basename(file)
@@ -247,7 +292,7 @@ class CloudMailAPI():
         else:
             print('File %s not found' % file)
             return
-        req = self.session.post('%s%s' % (upload_folder, url_param), files=files)
+        req = self.session.post('%s%s' % (self.file_upload_url, url_param), files=files)
         if req.status_code == 200:
             req = req.text.strip().split(';')
             return self.add_file(os.path.join(path, fName), req[1], req[0])
@@ -278,7 +323,7 @@ class CloudMailAPI():
         }'''
         return self.connect('POST', 'file/copy', {'home': file, 'conflict': 'rename', 'folder': folder})
 
-    def file(self, file, batch=False):
+    def file(self, file='/', batch=False):
         '''Return: {
             'time': 1485521913642,
             # Folder
