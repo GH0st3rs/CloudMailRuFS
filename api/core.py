@@ -32,7 +32,7 @@ class CloudMailAPI():
         self.public_url = 'https://cloud.mail.ru/public/'
         self.API_V = 2
         if email is not None and passwd is not None:
-            self.__auth(email, passwd)
+            self.auth(email, passwd)
         self.file_get_url = ''
         self.file_upload_url = ''
 
