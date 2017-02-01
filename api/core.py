@@ -54,7 +54,7 @@ class CloudMailAPI():
         login = self.email.split('@')[0]
         url = 'https://auth.mail.ru/cgi-bin/auth?lang=ru_RU&from=authpopup'
         data = {'page': 'https://cloud.mail.ru/?from=promo',
-                'Domain': 'mail.ru',
+                'Domain': self.email.split('@')[1],
                 'FailPage': '',
                 'Login': self.email,
                 'Password': passwd,
