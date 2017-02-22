@@ -4,7 +4,7 @@ import re
 import json
 import os
 import sys
-from time import time
+from time import time, sleep
 # Initialise global vars
 app_path = sys.path[0]
 data_path = os.path.join(app_path, 'data')
@@ -46,7 +46,7 @@ class CloudMailAPI():
         else:
             return False
 
-    def auth(self, email, passwd):
+    def auth(self, email, passwd, error_count=0):
         self.email = email.lower()
         if not re.match('[a-z0-9\.\_]+@[a-z]+\.[a-z]{2,4}', self.email) or passwd == '':
             print('Error you need enter login and password!')
@@ -78,11 +78,21 @@ class CloudMailAPI():
                     x_page_id = x_page_id[0]
                     BUILD = re.findall('"BUILD":"([a-zA-Z0-9]+)"', req.text)[0]
                 else:
-                    print('Error could not find csrf_token')
-                    return
+                    print('Error could not find x_page_id for user %s' % login)
+                    if error_count < 3:
+                        print('Reconnect after timeout 3 sec')
+                        sleep(3)
+                        return self.auth(email, passwd, error_count + 1)
+                    else:
+                        return
             else:
-                print('Error could not find csrf_token')
-                return
+                print('Error could not find csrf_token for user %s' % login)
+                if error_count < 3:
+                    print('Reconnect after timeout 3 sec')
+                    sleep(3)
+                    return self.auth(email, passwd, error_count + 1)
+                else:
+                    return
         # Set MAIN_HEADERS options
         self.MAIN_HEADERS['_'] = round(time() * 1000)
         self.MAIN_HEADERS['x-email'] = self.MAIN_HEADERS['email'] = self.email
@@ -191,10 +201,12 @@ class CloudMailAPI():
             "rev": 10413,
             "type": "folder",
             "home":"FOLDER_PATH"},...]'''
+        listing = []
         req = self.file(folder)
+        if req['status'] != 200:
+            return listing
         count = req['body']['count']['files'] + req['body']['count']['folders']
         offset = 0
-        listing = []
         while offset <= count:
             data = {'home': folder, 'sort': '{"type":"name","order":"asc"}', 'offset': offset, 'limit': 500}
             listing += self.connect('GET', 'folder', data)['body']['list']
@@ -220,7 +232,10 @@ class CloudMailAPI():
             'email': self.email,
             'status': 200
         }'''
-        return self.connect('POST', 'folder/add', {'conflict': 'rename', 'home': file})
+        req = self.file(file)
+        if req['status'] != 200:
+            return self.connect('POST', 'folder/add', {'conflict': 'rename', 'home': file})
+        return {'time': req['time'], 'body': file, 'email': self.email, 'status': req['status']}
 
     def share(self, file, batch=False):
         '''Create share link for file.
