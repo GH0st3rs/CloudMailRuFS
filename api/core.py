@@ -63,6 +63,7 @@ class CloudMailAPI():
                 'new_auth_form': 1}
         # Send request and parse data
         req = self.session.post(url, data)
+        # print(req.text)
         try:
             json_txt = re.findall('<script>window\[[a-zA-Z0-9\"\_]+\]\ *\=([^<]+)</script>', req.text)[0]
             json_txt = json.loads(re.sub('"ITEM_NAME_INVALID_CHARACTERS":"[^,]+",', '', json_txt)[:-1])
@@ -76,7 +77,7 @@ class CloudMailAPI():
                 x_page_id = re.findall('"x-page-id":"([a-zA-Z0-9]+)"', req.text)
                 if len(x_page_id) != 0:
                     x_page_id = x_page_id[0]
-                    BUILD = re.findall('"BUILD":"([a-zA-Z0-9]+)"', req.text)[0]
+                    BUILD = re.findall('"BUILD":"([\w\_\-\.]+)"', req.text)[0]
                 else:
                     print('Error could not find x_page_id for user %s' % login)
                     if error_count < 3:
