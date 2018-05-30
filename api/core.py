@@ -71,13 +71,13 @@ class CloudMailAPI():
             BUILD = json_txt['params']['BUILD']
             x_page_id = json_txt['params']['x-page-id']
         except:
-            csrf_token = re.findall('"csrf":"([a-zA-Z0-9]+)"', req.text)
+            csrf_token = re.findall('"csrf":[\ ]*"([\w]+)"', req.text)
             if len(csrf_token) != 0:
                 csrf_token = csrf_token[0]
-                x_page_id = re.findall('"x-page-id":"([a-zA-Z0-9]+)"', req.text)
+                x_page_id = re.findall('"x-page-id":[\ ]*"([a-zA-Z0-9]+)"', req.text)
                 if len(x_page_id) != 0:
                     x_page_id = x_page_id[0]
-                    BUILD = re.findall('"BUILD":"([\w\_\-\.]+)"', req.text)[0]
+                    BUILD = re.findall('"BUILD":[\ ]*"([\w\_\-\.]+)"', req.text)[0]
                 else:
                     print('Error could not find x_page_id for user %s' % login)
                     if error_count < 3:
